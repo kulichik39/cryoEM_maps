@@ -1,0 +1,5 @@
+.venv/
+chimera_logs/
+density_maps/
+__pycache__/
+train.py
