@@ -1,11 +1,18 @@
 import os
 import numpy as np
 
-from utilities import run_script_inside_chimera, read_density_data
+from utilities import (
+    run_script_inside_chimera,
+    read_density_data_mrc,
+    prepare_raw_pdb_file,
+    delete_extension_from_filename,
+)
 
 
 def random_delete_atoms_from_pdb_file(
-    pdb_filename, pdb_path=os.getcwd() + os.path.sep + "pdb_data", delete_prob=0.2
+    pdb_filename,
+    molecule_path=os.getcwd() + os.path.sep + "molecule_data",
+    delete_prob=0.2,
 ):
     """
     Randomly deletes atoms from the given pdb file to simulate the case when
@@ -13,46 +20,45 @@ def random_delete_atoms_from_pdb_file(
 
     Params:
     pdb_filename - name of the input .pdb file
-    pdb_path - path to the directory where input pdb file is stored
+    molecule_path - path to the directory where processed (prepared) molecule files are stored.
+    check prepare_raw... functions in utilities.py for more info
     delete_prob - probability for deleting an atom
 
     Returns:
     pdb_path_full_modified - full path to the new .pdb file with some atoms deleted
     """
 
-    assert pdb_filename.endswith(".pdb"), "Input pdb file must end with .pdb!"
+    assert pdb_filename.endswith(".pdb"), "pdb filename must end with .pdb!"
 
     # construct full path to the input pdb file
-    pdb_path_full = pdb_path + os.path.sep + pdb_filename
+    pdb_path_full = molecule_path + os.path.sep + pdb_filename
 
     # construct full path to the modified pdb file
-    pdb_path_full_modified = pdb_path + os.path.sep + "del_atoms_" + pdb_filename
+    pdb_path_full_modified = molecule_path + os.path.sep + "del_atoms_" + pdb_filename
 
     with open(pdb_path_full, "r") as input_file:
         with open(pdb_path_full_modified, "w") as output_file:
-            while True:
-                input_line = input_file.readline()
-                if not input_line:  # break from the loop when all lines were read
-                    break
-
-                # if this line corresponds to an atom, decide whether it should be
-                # deleted by using uniform random number between 0 and 1.
-                if input_line.startswith("ATOM"):
-                    random_val = np.random.rand()
-                    if random_val > delete_prob:
-                        output_file.write(input_line)
-                else:
+            for input_line in input_file:
+                # decide whether an atom should be deleted by using uniform random
+                # number between 0 and 1.
+                random_val = np.random.rand()
+                if random_val > delete_prob:
                     output_file.write(input_line)
+
     return pdb_path_full_modified
 
 
 if __name__ == "__main__":
 
-    input_pdb = "1c3b_ligand.pdb"  # name of the input pdb file
+    raw_input_pdb = "1c3b_ligand.pdb"  # name of the input pdb file
 
-    # delete some parts of the input pdb file and write a new file
+    # prepare raw pdb file to feed into Chimera, check prepare_raw_pdb_file() function
+    # in utilities.py for more details
+    prepared_input_pdb = prepare_raw_pdb_file(raw_input_pdb)
+
+    # delete some parts of the prepared input pdb file and write a new file
     del_pdb_path = random_delete_atoms_from_pdb_file(
-        input_pdb
+        prepared_input_pdb
     )  # full path to new pdb file
 
     # run python script inside Chimera
@@ -79,8 +85,11 @@ if __name__ == "__main__":
     # in the densisty_maps folder
     else:
         density_filename = (
-            "density_map" + "_" + del_pdb_path.split(os.path.sep)[-1] + ".txt"
+            "density_map"
+            + "_"
+            + delete_extension_from_filename(del_pdb_path.split(os.path.sep)[-1])
+            + ".mrc"
         )
-        density = read_density_data(density_filename)
+        density = read_density_data_mrc(density_filename)
         print(density.shape)
         print(np.nonzero(density))
