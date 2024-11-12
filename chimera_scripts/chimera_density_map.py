@@ -77,9 +77,7 @@ run_com(
 run_com("molmap #0 1", log_filename=log_fname)  # generate density map
 
 # save density map to file
-density_fname = (
-    "density_map" + "_" + delete_extension_from_filename(molecule_fname) + ".mrc"
-)
+density_fname = delete_extension_from_filename(molecule_fname) + ".mrc"
 volume_id = 0
 save_chimera_density_to_mrc_file_with_log(
     volume_id=volume_id,

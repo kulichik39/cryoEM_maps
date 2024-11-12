@@ -5,3 +5,6 @@ __pycache__/
 train.py
 chimera_scripts/*.pyc
 molecule_data/
+delatoms_molecule_data/
+raw_conformers_data/
+delatoms_conformers_data/
