@@ -66,6 +66,7 @@ def run_script_inside_chimera(
 
 def compute_density_map_in_chimera(
     molecule_path_full,
+    density_resolution=1.0,
     script_path=os.getcwd() + os.path.sep + "chimera_scripts",
 ):
     """
@@ -75,6 +76,7 @@ def compute_density_map_in_chimera(
 
     Params:
     molecule_path_full - full path to the input molecule file (including its name)
+    density_resolution - desired resolution of the map (in Angstrom)
     script_path - path to the folder with python script (excluding its name)
 
     Returns:
@@ -85,8 +87,8 @@ def compute_density_map_in_chimera(
     scipt_name = "chimera_density_map.py"
 
     # options for the python script
-    option_names = ("-i",)
-    option_values = (molecule_path_full,)
+    option_names = ("-i", "-r")
+    option_values = (molecule_path_full, density_resolution)
 
     # returns object corresponding to the subprocess
     p = run_script_inside_chimera(

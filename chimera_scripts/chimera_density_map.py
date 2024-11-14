@@ -3,10 +3,6 @@ import sys
 import getopt
 from datetime import datetime
 
-"""
-This Chimera script creates density map for one molecule provedied in the input file.
-"""
-
 # sys.dont_write_bytecode = (
 #     True  # disable generating .pyc compiled bytecode files for imported modules
 # )
@@ -31,17 +27,22 @@ log_fname_start = datetime.utcnow().strftime("%d_%m_%Y_%H.%M.%S.%f")[:-2] + "_lo
 # parse script's arguments
 try:
     # i stands for the full path to the input file with molecule data
-    opts, args = getopt.getopt(sys.argv[1:], "i:")
+    opts, args = getopt.getopt(sys.argv[1:], "i:r:")
 
     molecule_path = None  # full path to the molecule file (including file's name)
+    density_resolution = None  # density map resolution (in Angrstrom)
     for opt, arg in opts:
         if opt == "-i":
             molecule_path = arg
+        elif opt == "-r":
+            density_resolution = arg
 
-    # check if molecule_path is not None after arguments parsing
+    # check if the arguments are not None after arguments parsing
     assert (
         molecule_path
     ), "Path to the input molecule file is None after argument's parsing."
+
+    assert density_resolution, "Density resolution is None after argument's parsing."
 
     # extract name of the molecule file
     molecule_fname = molecule_path.split(os.path.sep)[-1]
@@ -81,7 +82,8 @@ run_com(
 
 volume_id = 0
 run_com(
-    "molmap #0 1 modelId {}".format(volume_id), log_filename=log_fname
+    "molmap #0 {} modelId {}".format(density_resolution, volume_id),
+    log_filename=log_fname,
 )  # generate density map
 
 # save density map to file

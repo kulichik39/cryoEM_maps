@@ -101,7 +101,10 @@ if __name__ == "__main__":
     )  # returns full path to new pdb file
 
     # run python script inside Chimera to compute density map
-    p = compute_density_map_in_chimera(del_pdb_path)
+    density_resolution = 3.5  # resolution of the density map (in Angstrom)
+    p = compute_density_map_in_chimera(
+        del_pdb_path, density_resolution=density_resolution
+    )
     stdout, stderr = p.communicate()  # output from the subprocess
 
     # if the subprocess finished with errors, check logs in chimera_logs folder

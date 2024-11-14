@@ -16,7 +16,7 @@ from rdkit.Chem import AllChem
 def generate_conformers(
     mol,
     n_confs,
-    add_Hs=True,
+    add_Hs=False,
     use_small_ring_torsions=True,
     prune_rms_tresh=1.0,
     random_seed=0xF00D,
@@ -110,7 +110,7 @@ def generate_conformers(
 if __name__ == "__main__":
 
     # construct input paths
-    input_filename = "5SD5_HWI_ligand.sdf"
+    input_filename = "1c3b_ligand.pdb"
     input_path = os.getcwd() + os.path.sep + "raw_molecule_data"
 
     # read molecule data using RDKit
@@ -121,7 +121,7 @@ if __name__ == "__main__":
     mol = generate_conformers(
         mol,
         n_confs=n_confs,
-        add_Hs=True,
+        add_Hs=False,
         use_small_ring_torsions=True,
         prune_rms_tresh=1.0,
     )
@@ -145,7 +145,10 @@ if __name__ == "__main__":
     )
 
     # compute "average" density map for the grouped conformers
-    p = compute_density_map_in_chimera(group_conformers_path)
+    density_resolution = 3.5  # resolution of the density map (in Angstrom)
+    p = compute_density_map_in_chimera(
+        group_conformers_path, density_resolution=density_resolution
+    )
 
     # check the density
     stdout, stderr = p.communicate()

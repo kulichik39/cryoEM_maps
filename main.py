@@ -30,7 +30,7 @@ if __name__ == "__main__":
     mol = generate_conformers(
         mol,
         n_confs=n_confs,
-        add_Hs=True,
+        add_Hs=False,
         use_small_ring_torsions=True,
         prune_rms_tresh=1.0,
     )
@@ -64,7 +64,10 @@ if __name__ == "__main__":
     )
 
     # compute "average" density map for the grouped conformers
-    p = compute_density_map_in_chimera(delatoms_conformer_path)
+    density_resolution = 3.5  # resolution of the density map (in Angstrom)
+    p = compute_density_map_in_chimera(
+        delatoms_conformer_path, density_resolution=density_resolution
+    )
 
     # check the density
     stdout, stderr = p.communicate()
