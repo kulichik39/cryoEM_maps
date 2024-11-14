@@ -229,6 +229,20 @@ def extract_filename_from_full_path(full_path):
     return full_path.split(os.path.sep)[-1]
 
 
+def extract_format_from_filename(filename):
+    """
+    Gets file's format from the given filename.
+
+    Params:
+    filename - name of the file
+
+    Returns:
+    format of the file
+    """
+
+    return filename.split(".")[-1]
+
+
 def read_molecules_from_sdf(
     sdf_filename,
     sdf_path=os.getcwd() + os.path.sep + "raw_molecule_data",
@@ -316,7 +330,7 @@ def read_molecule(
     """
 
     # extract format of the input file
-    file_format = filename.split(".")[-1]
+    file_format = extract_format_from_filename(filename)
 
     match file_format:
         case "sdf":
@@ -341,7 +355,7 @@ def save_one_conformer_to_pdb(
     mol,
     conf_id,
     pdb_filename,
-    pdb_path=os.getcwd() + os.path.sep + "raw_molecule_data",
+    pdb_path=os.getcwd() + os.path.sep + "raw_conformers_data",
 ):
     """
     Saves specified (by conf_id) conformer of the given RDKit molecule to a .pdb file.
@@ -376,7 +390,7 @@ def save_one_conformer_to_pdb(
 def save_all_conformers_to_pdb(
     mol,
     base_pdb_filename,
-    pdb_path=os.getcwd() + os.path.sep + "raw_molecule_data",
+    pdb_path=os.getcwd() + os.path.sep + "raw_conformers_data",
 ):
     """
     Saves all conformers of the given RDKit molecule to .pdb files.
@@ -407,3 +421,56 @@ def save_all_conformers_to_pdb(
         pdb_path_full_list.append(pdb_path_full)
 
     return pdb_path_full_list
+
+
+def group_conformers_to_single_file(
+    path_full_list,
+    group_filename,
+    group_path=os.getcwd() + os.path.sep + "raw_conformers_data",
+    delete_input=True,
+):
+    """
+    Groups multiple conformers data into a single file. The paths to the input conformers files are
+    provided in the path_full_list.
+
+    Params:
+    path_full_list - list with full paths to the input conformers' files to group (including their names)
+    group_filename - name of the file where the conformers will be written
+    group_path - path to the group file (excluding its name)
+    delte_input - whether to delete input conformers' files
+
+    Returns:
+    group_path_full - full path to the file where conformers are grouped (including its name)
+    """
+
+    # exctract format of the group file
+    group_file_format = extract_format_from_filename(group_filename)
+
+    if not os.path.exists(
+        group_path
+    ):  # create the folder for group if it doesn't exist
+        os.mkdir(group_path)
+
+    # construct full path to the group fil
+    group_path_full = group_path + os.path.sep + group_filename
+
+    # check if the format of each input file match with the group file format
+    for path_full in path_full_list:
+        input_filename = extract_filename_from_full_path(path_full)
+        input_file_format = extract_format_from_filename(input_filename)
+        assert (
+            input_file_format == group_file_format
+        ), f"Format of the group file ({group_file_format}) isn't the same as input file's format ({input_file_format}). Change input file {path_full} or group file {group_path_full}."
+
+    # group input files into a sinlge output file
+    with open(group_path_full, "w") as group_file:
+        for path_full in path_full_list:
+            with open(path_full, "r") as input_file:
+                group_file.writelines(input_file)
+
+            group_file.write("\n")
+
+            if delete_input:
+                os.remove(path_full)
+
+    return group_path_full

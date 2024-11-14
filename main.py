@@ -6,19 +6,20 @@ from utilities import (
     save_all_conformers_to_pdb,
     extract_filename_from_full_path,
     read_density_data_mrc,
+    group_conformers_to_single_file,
+    compute_density_map_in_chimera,
 )
 
 from internal_flexibility import (
     generate_conformers,
-    compute_density_for_multiple_conformers,
 )
 
-from missing_parts import random_delete_atoms_from_multiple_pdb_files
+from missing_parts import random_delete_atoms_from_pdb_file
 
 if __name__ == "__main__":
 
     # construct input paths
-    input_filename = "5SD5_HWI_ligand.sdf"
+    input_filename = "1c3b_ligand.pdb"
     input_path = os.getcwd() + os.path.sep + "raw_molecule_data"
 
     # read molecule data using RDKit
@@ -41,38 +42,47 @@ if __name__ == "__main__":
         mol, base_conformer_filename, pdb_path=conformers_path
     )
 
+    # group conformers' files into a single file to generate an "average" map
+    group_filename = (
+        "group_conformers_" + delete_extension_from_filename(input_filename) + ".pdb"
+    )
+    group_conformers_path = group_conformers_to_single_file(
+        conformer_path_list,
+        group_filename,
+        group_path=conformers_path,
+        delete_input=True,
+    )
+
     # randomly delete atoms from the generated conformers
     delete_prob = 0.2  # probability of atom deleting
-    # path to store cofomormers with deleted atoms
-    delatoms_conformer_path = os.getcwd() + os.path.sep + "delatoms_conformers_data"
-    delatoms_conformer_path_list = random_delete_atoms_from_multiple_pdb_files(
-        conformer_path_list,
-        delatoms_molecule_path=delatoms_conformer_path,
+    # path to the folder where conformers with deleted atoms are stored
+    delatoms_conformer_folder = os.getcwd() + os.path.sep + "delatoms_conformers_data"
+    delatoms_conformer_path = random_delete_atoms_from_pdb_file(
+        group_conformers_path,
+        delatoms_molecule_path=delatoms_conformer_folder,
         delete_prob=delete_prob,
     )
 
-    # compute density maps for generated conformers
-    print(delatoms_conformer_path_list)
-    p_list = compute_density_for_multiple_conformers(delatoms_conformer_path_list)
+    # compute "average" density map for the grouped conformers
+    p = compute_density_map_in_chimera(delatoms_conformer_path)
 
-    # check computed density maps
-    for i in range(len(p_list)):
-        stdout, stderr = p_list[i].communicate()
+    # check the density
+    stdout, stderr = p.communicate()
 
-        # if the subprocess finished with errors, check logs in chimera_logs folder
-        if stderr:
-            print(stderr)
-            print("Failed to compute density map. Check logs in chimera_logs folder.")
+    # if the subprocess finished with errors, check logs in chimera_logs folder
+    if stderr:
+        print(stderr)
+        print("Failed to compute density map. Check logs in chimera_logs folder.")
 
-        # if the subprocess finished correctly, check obtained denisty map
-        # in the densisty_maps folder
-        else:
-            density_filename = (
-                delete_extension_from_filename(
-                    extract_filename_from_full_path(delatoms_conformer_path_list[i])
-                )
-                + ".mrc"
+    # if the subprocess finished correctly, check obtained denisty map
+    # in the densisty_maps folder
+    else:
+        density_filename = (
+            delete_extension_from_filename(
+                extract_filename_from_full_path(group_conformers_path)
             )
+            + ".mrc"
+        )
         density = read_density_data_mrc(density_filename)
         print(density.shape)
         print(np.nonzero(density))

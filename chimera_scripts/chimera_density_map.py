@@ -3,6 +3,10 @@ import sys
 import getopt
 from datetime import datetime
 
+"""
+This Chimera script creates density map for one molecule provedied in the input file.
+"""
+
 # sys.dont_write_bytecode = (
 #     True  # disable generating .pyc compiled bytecode files for imported modules
 # )
@@ -74,11 +78,14 @@ log("Started Chimera commands.", status="INFO", log_filename=log_fname)
 run_com(
     "open " + molecule_path, log_filename=log_fname
 )  # open model from the molecule file
-run_com("molmap #0 1", log_filename=log_fname)  # generate density map
+
+volume_id = 0
+run_com(
+    "molmap #0 1 modelId {}".format(volume_id), log_filename=log_fname
+)  # generate density map
 
 # save density map to file
 density_fname = delete_extension_from_filename(molecule_fname) + ".mrc"
-volume_id = 0
 save_chimera_density_to_mrc_file_with_log(
     volume_id=volume_id,
     density_filename=density_fname,
