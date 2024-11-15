@@ -3,6 +3,7 @@ import numpy as np
 import mrcfile
 from subprocess import PIPE, Popen
 from rdkit import Chem
+from datetime import datetime, timezone
 
 
 def run_script_inside_chimera(
@@ -66,6 +67,7 @@ def run_script_inside_chimera(
 
 def compute_density_map_in_chimera(
     molecule_path_full,
+    density_path_full,
     density_resolution=1.0,
     script_path=os.getcwd() + os.path.sep + "chimera_scripts",
 ):
@@ -76,6 +78,7 @@ def compute_density_map_in_chimera(
 
     Params:
     molecule_path_full - full path to the input molecule file (including its name)
+    density_path_full - full path to the output mrc density file (including its name)
     density_resolution - desired resolution of the map (in Angstrom)
     script_path - path to the folder with python script (excluding its name)
 
@@ -87,8 +90,8 @@ def compute_density_map_in_chimera(
     scipt_name = "chimera_density_map.py"
 
     # options for the python script
-    option_names = ("-i", "-r")
-    option_values = (molecule_path_full, density_resolution)
+    option_names = ("-i", "-r", "-o")
+    option_values = (molecule_path_full, density_resolution, density_path_full)
 
     # returns object corresponding to the subprocess
     p = run_script_inside_chimera(
@@ -144,26 +147,21 @@ def compute_density_map_in_chimera(
 
 
 def read_density_data_mrc(
-    density_filename,
-    density_path=os.getcwd() + os.path.sep + "density_maps",
+    density_path_full
 ):
     """
     Reads density map data from the given .mrc file and converts it to numpy array.
 
     Params:
-    density_filename - name of the file with density data
-    density_path - path to the directory where density file is stored
+    denisty_path_full - full path to the density file (including its name)
 
     Returns:
     density - numpy array with density data
     """
 
-    assert density_filename.endswith(".mrc"), "mrc filename must end with .mrc!"
+    assert density_path_full.endswith(".mrc"), "mrc filename must end with .mrc!"
 
-    # full path to the density file (including its name)
-    path_full = density_path + os.path.sep + density_filename
-
-    with mrcfile.open(path_full) as mrc:
+    with mrcfile.open(density_path_full) as mrc:
         density = mrc.data
 
     return density
@@ -217,7 +215,7 @@ def delete_extension_from_filename(filename):
     return ".".join(filename.split(".")[:-1])
 
 
-def extract_filename_from_full_path(full_path):
+def extract_filename_from_full_path(path_full):
     """
     Extracts filename from the full (including the name) path to file.
 
@@ -228,7 +226,7 @@ def extract_filename_from_full_path(full_path):
     filename extracted from the full path
     """
 
-    return full_path.split(os.path.sep)[-1]
+    return path_full.split(os.path.sep)[-1]
 
 
 def extract_format_from_filename(filename):
@@ -246,8 +244,7 @@ def extract_format_from_filename(filename):
 
 
 def read_molecules_from_sdf(
-    sdf_filename,
-    sdf_path=os.getcwd() + os.path.sep + "raw_molecule_data",
+    sdf_path_full,
     n_mols=1,
     remove_Hs=True,
 ):
@@ -255,8 +252,7 @@ def read_molecules_from_sdf(
     Reads molecules data from the given .sdf file using RDKit library.
 
     Params:
-    sdf_filename - name of the input sdf file
-    sdf_path - path to the folder where the input sdf is stored (excluding its name)
+    sdf_path_full - full path to the input .sdf file (including its name)
     n_mols - expected number of molecules to read from the file
     remove_Hs - whether to remove hydrogen atoms from the molecule when reading
 
@@ -264,10 +260,7 @@ def read_molecules_from_sdf(
     mols - list with RDKit molecule objects obtained from the given file
     """
 
-    assert sdf_filename.endswith(".sdf"), "sdf filename must end with .sdf!"
-
-    # construct full path to the given sdf file (including its name)
-    sdf_path_full = sdf_path + os.path.sep + sdf_filename
+    assert sdf_path_full.endswith(".sdf"), "sdf filename must end with .sdf!"
 
     mols = []  # list to store RDKit molecule objects
 
@@ -288,8 +281,7 @@ def read_molecules_from_sdf(
 
 
 def read_molecule_from_pdb(
-    pdb_filename,
-    pdb_path=os.getcwd() + os.path.sep + "raw_molecule_data",
+    pdb_path_full,
     remove_Hs=True,
 ):
     """
@@ -298,18 +290,14 @@ def read_molecule_from_pdb(
     read only the first one.
 
     Params:
-    pdb_filename - name of the input pdb file
-    pdb_path - path to the folder where the input pdb is stored (excluding its name)
+    pdb_path_full - full path to the input .pdb file (including its name)
     remove_Hs - whether to remove hydrogen atoms from the molecule when reading
 
     Returns:
     mol - RDKit molecule object obtained from the given file
     """
 
-    assert pdb_filename.endswith(".pdb"), "pdb filename must end with .pdb!"
-
-    # construct full path to the given pdb file (including its name)
-    pdb_path_full = pdb_path + os.path.sep + pdb_filename
+    assert pdb_path_full.endswith(".pdb"), "pdb filename must end with .pdb!"
 
     mol = Chem.MolFromPDBFile(pdb_path_full, removeHs=remove_Hs)
 
@@ -317,33 +305,35 @@ def read_molecule_from_pdb(
 
 
 def read_molecule(
-    filename, file_path=os.getcwd() + os.path.sep + "raw_molecule_data", remove_Hs=True
+    path_full, remove_Hs=True
 ):
     """
     Reads one molecule data from the given file and converts it to an RDKit molecule object.
 
     Params:
-    filename - name of the input file
-    file_path - path to the folder where the input file is stored (excluding its name)
+    path_full - full path to the input molecule file
     remove_Hs - whether to remove hydrogen atoms from the molecule when reading
 
     Returns:
     mol - RDKit molecule object obtained from the given file
     """
 
-    # extract format of the input file
+    # exctract name of the file from full path
+    filename = extract_filename_from_full_path(path_full)
+
+    # extract format of the name
     file_format = extract_format_from_filename(filename)
 
     match file_format:
         case "sdf":
             mols = read_molecules_from_sdf(
-                filename, sdf_path=file_path, n_mols=1, remove_Hs=remove_Hs
+                path_full, n_mols=1, remove_Hs=remove_Hs
             )
             return mols[0]
 
         case "pdb":
             mol = read_molecule_from_pdb(
-                filename, pdb_path=file_path, remove_Hs=remove_Hs
+                path_full, remove_Hs=remove_Hs
             )
             return mol
 
@@ -439,7 +429,7 @@ def group_conformers_to_single_file(
     path_full_list - list with full paths to the input conformers' files to group (including their names)
     group_filename - name of the file where the conformers will be written
     group_path - path to the group file (excluding its name)
-    delte_input - whether to delete input conformers' files
+    delete_input - whether to delete input conformers' files
 
     Returns:
     group_path_full - full path to the file where conformers are grouped (including its name)
@@ -476,3 +466,77 @@ def group_conformers_to_single_file(
                 os.remove(path_full)
 
     return group_path_full
+
+
+def rescale_density_map(density_path_full, rescaled_path_full, box_size=16):
+    """
+    Rescales given density map such that it fits the given box size. 
+    Achieves this by running relion software commands through a subprocess.
+
+    Params:
+    density_path_full - full path to the input denisty map i.e. map to rescale (including its name)
+    rescaled_path_full - full path to the output file with rescaled density
+    box_size - size of the box (the box to which we rescale)
+
+    Returns:
+    p - object of the Popen class corresponding to the relion's subprocess
+    """
+  
+    # run relion's command through a subpprocess
+    p = Popen(
+    [
+        "relion_image_handler",
+        "--i",
+        density_path_full,
+        "--new_box",
+        str(box_size),
+        "--o",
+        rescaled_path_full
+    ],
+    stdout=PIPE,
+    stderr=PIPE,
+    )
+    
+    return p
+
+
+
+def log(
+    message,
+    status="ERROR",
+    log_path=os.getcwd() + os.path.sep + "logs",
+    log_filename="log.txt",
+):
+    """
+    Creates logs.
+
+    Params:
+    message - message to put in the log file
+    status - status of the message. Two options: INFO and ERROR
+    log_path - path to the directory with log files
+    log_filename - name of the log file
+    """
+
+    # create directory for log files if it doesn't exist
+    # NOTE: commented out folder creation since there were conflicts with Multi Processing
+    # if not os.path.exists(log_path):
+    #     os.mkdir(log_path)
+
+    # full path to the log file (including its name)
+    path_full = log_path + os.path.sep + log_filename
+
+    # convert message to string in the case if exception was provided
+    message = str(message)
+
+    if not message.endswith("\n"):
+        message += "\n"
+
+    # log_message includes utc time of the message, status of the message
+    # and the message itself
+    log_message = (
+        datetime.now(timezone.utc).strftime("%H:%M:%S.%f") + " " + status + ": " + message
+    )
+
+    with open(path_full, "a") as f:
+        f.write(log_message)
+

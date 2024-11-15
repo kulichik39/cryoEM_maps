@@ -27,25 +27,29 @@ log_fname_start = datetime.utcnow().strftime("%d_%m_%Y_%H.%M.%S.%f")[:-2] + "_lo
 # parse script's arguments
 try:
     # i stands for the full path to the input file with molecule data
-    opts, args = getopt.getopt(sys.argv[1:], "i:r:")
+    opts, args = getopt.getopt(sys.argv[1:], "i:r:o:")
 
-    molecule_path = None  # full path to the molecule file (including file's name)
+    molecule_path_full = None  # full path to the molecule file (including its name)
+    density_path_full = None # full path to the output density file (including its name)
     density_resolution = None  # density map resolution (in Angrstrom)
     for opt, arg in opts:
         if opt == "-i":
-            molecule_path = arg
+            molecule_path_full = arg
         elif opt == "-r":
             density_resolution = arg
+        elif opt == "-o":
+            density_path_full = arg
 
     # check if the arguments are not None after arguments parsing
     assert (
-        molecule_path
+        molecule_path_full
     ), "Path to the input molecule file is None after argument's parsing."
 
     assert density_resolution, "Density resolution is None after argument's parsing."
+    assert density_path_full, "Path to the output density file is None after argument's parsing."
 
     # extract name of the molecule file
-    molecule_fname = molecule_path.split(os.path.sep)[-1]
+    molecule_fname = molecule_path_full.split(os.path.sep)[-1]
 
 except getopt.GetoptError as e:
     log(
@@ -77,7 +81,7 @@ log_fname = (
 log("Started Chimera commands.", status="INFO", log_filename=log_fname)
 
 run_com(
-    "open " + molecule_path, log_filename=log_fname
+    "open " + molecule_path_full, log_filename=log_fname
 )  # open model from the molecule file
 
 volume_id = 0
@@ -87,14 +91,13 @@ run_com(
 )  # generate density map
 
 # save density map to file
-density_fname = delete_extension_from_filename(molecule_fname) + ".mrc"
 save_chimera_density_to_mrc_file_with_log(
+    density_path_full,
     volume_id=volume_id,
-    density_filename=density_fname,
     log_filename=log_fname,
 )
 
-# if all commands
+# if all commands run successfully, log info message and stop Chimera
 log(
     "Successfully finished Chimera commands! Exiting...",
     status="INFO",

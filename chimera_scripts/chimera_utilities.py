@@ -22,8 +22,9 @@ def log(
     """
 
     # create directory for log files if it doesn't exist
-    if not os.path.exists(log_path):
-        os.mkdir(log_path)
+    # NOTE: commented out folder creation since there were conflicts with Multi Processing
+    # if not os.path.exists(log_path):
+    #     os.mkdir(log_path)
 
     # full path to the log file (including its name)
     path_full = log_path + os.path.sep + log_filename
@@ -101,34 +102,27 @@ def delete_extension_from_filename(filename):
 
 
 def save_chimera_density_to_mrc_file(
-    volume_id=0,
-    density_path=os.getcwd() + os.path.sep + "density_maps",
-    density_filename="density.mrc",
+    density_path_full,
+    volume_id=0
 ):
     """
     Saves density map computed in Chimera to the specified .mrc file.
 
     Params:
+    density_path_full - full path to the density file (including its name)
     volume_id - id of the Chimera's volume with density data
-    density_path - path to the directory where density maps are stored
-    density_fname - name of the file to store the density map in
     """
-    assert density_filename.endswith(".mrc"), "mrc filename must end with .mrc!"
+    
+    assert density_path_full.endswith(".mrc"), "mrc filename must end with .mrc!"
 
-    # create directory for density maps if it doesn't exist
-    if not os.path.exists(density_path):
-        os.mkdir(density_path)
-
-    path_full = density_path + os.path.sep + density_filename
     run_chimera_command(
-        "volume #{} save {} saveFormat mrc".format(volume_id, path_full)
+        "volume #{} save {} saveFormat mrc".format(volume_id, density_path_full)
     )
 
 
 def save_chimera_density_to_mrc_file_with_log(
+    density_path_full,
     volume_id=0,
-    density_path=os.getcwd() + os.path.sep + "density_maps",
-    density_filename="density.mrc",
     log_path=os.getcwd() + os.path.sep + "chimera_logs",
     log_filename="log.txt",
 ):
@@ -136,17 +130,15 @@ def save_chimera_density_to_mrc_file_with_log(
     Same as save_chimera_density_to_mrc_file() but with logging options.
 
     Params:
+    density_path_full - full path to the density file (including its name)
     volume_id - id of the Chimera's volume with density data
-    density_path - path to the directory where density maps are stored
-    density_fname - name of the file to store the density map in
     log_path - path to the directory with log files
     log_filename - name of the log file
     """
     try:
         save_chimera_density_to_mrc_file(
-            volume_id=volume_id,
-            density_path=density_path,
-            density_filename=density_filename,
+            density_path_full,
+            volume_id=volume_id
         )
         log(
             "Successfully saved Chimera density to .mrc file.",

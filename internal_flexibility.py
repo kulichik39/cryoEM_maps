@@ -110,11 +110,12 @@ def generate_conformers(
 if __name__ == "__main__":
 
     # construct input paths
-    input_filename = "1c3b_ligand.pdb"
+    input_filename = "5SD5_HWI_ligand.sdf"
     input_path = os.getcwd() + os.path.sep + "raw_molecule_data"
+    molecule_path = input_path + os.path.sep + input_filename
 
     # read molecule data using RDKit
-    mol = read_molecule(input_filename, file_path=input_path, remove_Hs=True)
+    mol = read_molecule(molecule_path, remove_Hs=True)
 
     # generate conformers
     n_confs = 5
@@ -146,8 +147,17 @@ if __name__ == "__main__":
 
     # compute "average" density map for the grouped conformers
     density_resolution = 3.5  # resolution of the density map (in Angstrom)
+    density_filename = ( 
+            delete_extension_from_filename(
+                input_filename
+            )
+            + ".mrc"
+        )
+    density_path_full = os.getcwd() + os.path.sep + "density_maps" + os.path.sep + density_filename
+    if not os.path.exists(os.getcwd() + os.path.sep + "density_maps"):
+        os.mkdir(os.getcwd() + os.path.sep + "density_maps")
     p = compute_density_map_in_chimera(
-        group_conformers_path, density_resolution=density_resolution
+        group_conformers_path, density_path_full, density_resolution=density_resolution
     )
 
     # check the density
@@ -161,12 +171,6 @@ if __name__ == "__main__":
     # if the subprocess finished correctly, check obtained denisty map
     # in the densisty_maps folder
     else:
-        density_filename = (
-            delete_extension_from_filename(
-                extract_filename_from_full_path(group_conformers_path)
-            )
-            + ".mrc"
-        )
-        density = read_density_data_mrc(density_filename)
+        density = read_density_data_mrc(density_path_full)
         print(density.shape)
         print(np.nonzero(density))

@@ -37,7 +37,7 @@ def random_delete_atoms_from_pdb_file(
         os.mkdir(delatoms_molecule_path)
 
     # construct full path to the pdb file with some deleted atoms
-    delatoms_pdb_path_full = delatoms_molecule_path + os.path.sep + pdb_filename
+    delatoms_pdb_path_full = delatoms_molecule_path + os.path.sep + "del_atoms_" + pdb_filename
 
     with open(pdb_path_full, "r") as input_file:
         with open(delatoms_pdb_path_full, "w") as output_file:
@@ -68,7 +68,7 @@ def random_delete_atoms_from_multiple_pdb_files(
     pdb_path_full_list - list with full paths to the input .pdb files (icnluding their names)
     delatoms_molecule_path - path to the directory where files with some deleted atoms are
     stored
-    delete_prob - probability for deleting an atom
+    delete_prob - probability of deleting an atom
 
     Returns:
     delatoms_pdb_path_full_list - list with full paths to the new .pdb files with some atoms
@@ -96,14 +96,24 @@ if __name__ == "__main__":
     input_path_full = input_path + os.path.sep + input_filename
 
     # delete some atoms from the input pdb file and write a new file
+    delete_prob = 0.2
     del_pdb_path = random_delete_atoms_from_pdb_file(
-        input_path_full
+        input_path_full, delete_prob=delete_prob
     )  # returns full path to new pdb file
 
     # run python script inside Chimera to compute density map
     density_resolution = 3.5  # resolution of the density map (in Angstrom)
+    density_filename = (
+            delete_extension_from_filename(
+                input_filename
+            )
+            + ".mrc"
+        )
+    density_path_full = os.getcwd() + os.path.sep + "density_maps" + os.path.sep + density_filename
+    if not os.path.exists(os.getcwd() + os.path.sep + "density_maps"):
+        os.mkdir(os.getcwd() + os.path.sep + "density_maps")
     p = compute_density_map_in_chimera(
-        del_pdb_path, density_resolution=density_resolution
+        del_pdb_path, density_path_full, density_resolution=density_resolution
     )
     stdout, stderr = p.communicate()  # output from the subprocess
 
@@ -115,12 +125,6 @@ if __name__ == "__main__":
     # if the subprocess finished correctly, check obtained denisty map
     # in the densisty_maps folder
     else:
-        density_filename = (
-            delete_extension_from_filename(
-                extract_filename_from_full_path(del_pdb_path)
-            )
-            + ".mrc"
-        )
-        density = read_density_data_mrc(density_filename)
+        density = read_density_data_mrc(density_path_full)
         print(density.shape)
         print(np.nonzero(density))
