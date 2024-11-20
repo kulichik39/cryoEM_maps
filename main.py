@@ -10,7 +10,8 @@ from utilities import (
     group_conformers_to_single_file,
     compute_density_map_in_chimera,
     rescale_density_map,
-    log
+    log,
+    create_folder
 )
 
 from internal_flexibility import (
@@ -18,6 +19,7 @@ from internal_flexibility import (
 )
 
 from missing_parts import random_delete_atoms_from_pdb_file
+from datetime import datetime, timezone
 
 def read_molecule_names_from_file(path_full, skip_header=1, delimiter=','):
     """
@@ -77,12 +79,14 @@ def generate_low_resolution_density(
         remove_Hs=True, 
         n_confs=5, 
         add_Hs=False, 
-        use_small_ring_torsions=True, 
+        use_small_ring_torsions=False, 
         prune_rms_tresh=1.0,
         random_seed=0xF00D,
         delete_prob=0.2,
         density_resolution=3.5,
-        box_size=16
+        box_size=16,
+        is_log_chimera=False,
+        log_chimera_path=os.getcwd() + os.path.sep + "chimera_logs"
         ):
     """
     Creates low resolution density map for the given molecule.
@@ -100,11 +104,12 @@ def generate_low_resolution_density(
     delete_prob - probability of deleting an atom from the molecule file
     density_resolution - desired resolution of the density map (in Angstrom)
     box_size - size of the box for density rescaling
+    is_log_chimera - whether logs for Chimera script should be written
+    log_chimera_path - path to the folder where Chimera log files will be written
     """
 
     # create the folder for temporary files if it doesn't exist
-    if not os.path.exists(temporary_path): 
-        os.mkdir(temporary_path)
+    create_folder(temporary_path)
 
     # read molecule data using RDKit
     mol = read_molecule(input_molecule_path_full, remove_Hs=remove_Hs)
@@ -154,41 +159,84 @@ def generate_low_resolution_density(
             + ".mrc"
         )
     density_path_full = temporary_path + os.path.sep + density_filename
-    p = compute_density_map_in_chimera(
-        delatoms_conformer_path, density_path_full, density_resolution=density_resolution
+
+    # full path to the file to store Chimera subprocess errors if any
+    stderr_file_chim_path = (
+        os.getcwd() + 
+        os.path.sep + 
+        f"temp_chim_{delete_extension_from_filename(extract_filename_from_full_path(input_molecule_path_full))}.err"
     )
-    _, stderr = p.communicate()
+    stderr_file_chim = open(stderr_file_chim_path, "w") # file to store Chimera errors 
+    p_chim = compute_density_map_in_chimera(
+        delatoms_conformer_path, 
+        density_path_full, 
+        is_log=is_log_chimera, 
+        log_path=log_chimera_path, 
+        density_resolution=density_resolution,
+        stderr_file=stderr_file_chim
+    )
+    return_code_chim = p_chim.wait()
+    stderr_file_chim.close()
+
     # if the Chimera's subprocess finished with errors, raise RuntimeError
-    if stderr:
-        raise RuntimeError(f"Chimera's subprocess finished with errors: {stderr}")
+    stderr_file_chim = open(stderr_file_chim_path, "r")
+    err_chim = stderr_file_chim.read()
+    stderr_file_chim.close()
+    os.remove(stderr_file_chim_path)
+    # NOTE: here we skip errors that contain "Cannot find consistent set of bond" cause even with it
+    # Chimera generates code density maps
+    if return_code_chim != 0 or (err_chim and "Cannot find consistent set of bond" not in err_chim):
+        raise RuntimeError("Chimera's subprocess finished with errors: " + err_chim)
     
 
     # rescale density map using Relion software
-    p = rescale_density_map(density_path_full, output_density_path_full, box_size=box_size)
-    _, stderr = p.communicate()
+    # full path to the file to store Relion subprocess errors if any
+    stderr_file_relion_path = (
+        os.getcwd() + 
+        os.path.sep + 
+        f"temp_relion_{delete_extension_from_filename(extract_filename_from_full_path(input_molecule_path_full))}.err"
+    )
+    stderr_file_relion = open(stderr_file_relion_path, "w") # file to store Chimera errors 
+    p_relion = rescale_density_map(
+        density_path_full, 
+        output_density_path_full, 
+        box_size=box_size,
+        stderr_file=stderr_file_relion
+    )
+    # _, stderr_relion = p_relion.communicate()
+    return_code_relion = p_relion.wait()
+    stderr_file_relion.close()
 
     # if the Relion's subprocess finished with errors, raise RuntimeError
-    if stderr:
-        raise RuntimeError(f"Relion's subprocess finished with errors: {stderr}")
+    stderr_file_relion = open(stderr_file_relion_path, "r")
+    err_relion = stderr_file_relion.read()
+    stderr_file_relion.close()
+    os.remove(stderr_file_relion_path)
+    if return_code_relion != 0 or err_relion:
+        # raise RuntimeError(f"Relion's subprocess finished with errors: {stderr_relion}")
+        raise RuntimeError(f"Relion's subprocess finished with errors: " + err_relion)
 
 
 def main(
         molecule_name,
         db_path,
+        output_density_path_full,
         temporary_path=os.getcwd() + os.path.sep + "temp",
         remove_Hs=True, 
         n_confs=5, 
         add_Hs=False, 
-        use_small_ring_torsions=True, 
+        use_small_ring_torsions=False, 
         prune_rms_tresh=1.0,
         random_seed=0xF00D,
         delete_prob=0.2,
         density_resolution=3.5,
         box_size=16,
-        write_log=True,
-        log_filename="log.txt",
-        log_path=os.getcwd() + os.path.sep + "log",
-        clear_temporary=True
+        clear_temporary=True,
+        is_log_main=True,
+        log_main_path=os.getcwd() + os.path.sep + "log",
+        log_main_filename="log.txt",
+        is_log_chimera=False,
+        log_chimera_path=os.getcwd() + os.path.sep + "chimera_logs"
         ):
     """
     The main function for generating low resolution density maps for molecule ligands from the database.
@@ -196,6 +244,7 @@ def main(
     Params:
     molecule_name - name of the molecule
     db_path - path to the database
+    output_density_path_full - full path to the output density file (including its name)
     temporary_path - path to the folder where temporary files (e.g conformers) will be stored
     remove_Hs - whether to remove hydrogen atoms when reading  the input molecule file
     n_confs - number of conformers to generate
@@ -206,27 +255,18 @@ def main(
     delete_prob - probability of deleting an atom from the molecule file
     density_resolution - desired resolution of the density map (in Angstrom)
     box_size - size of the box for density rescaling
-    write_log - whether logs should be written
-    log_filename - name of the log file
-    log_path - path to the folder where log file should be written (excluding its name)
     clear_temporary - whether to clear folder with temporary files once the functions exits
-
-    Returns:
-    output_density_path_full - full path to the output density file (including its name)
+    is_log_main - whether logs for the main script should be written
+    log_main_path - path to the folder where main log file should be written 
+    log_main_filename - name of the main log file
+    is_log_chimera - whether logs for Chimera script should be written
+    log_chimera_path - path to the folder where Chimera log file should be written 
     """
 
     try:
         # find corresponding ligand path in the database
         input_ligand_path_full = find_ligand_file_in_db(molecule_name, db_path)
 
-        # construct full path to the output density file
-        output_density_path_full = (
-            db_path + 
-            os.path.sep + 
-            molecule_name + 
-            os.path.sep + 
-            f"{molecule_name}_ligand_scaled_boxed_{box_size}A_low_resolution_forward_model.mrc"
-        )
         generate_low_resolution_density(
             input_ligand_path_full,
             output_density_path_full,
@@ -239,21 +279,24 @@ def main(
             random_seed=random_seed,
             delete_prob=delete_prob,
             density_resolution=density_resolution,
-            box_size=box_size
+            box_size=box_size,
+            is_log_chimera=is_log_chimera,
+            log_chimera_path=log_chimera_path
         )
 
-        if write_log:
-            log(f"Successfully computed density map for {molecule_name}. Check the map in: {output_density_path_full}.", status="INFO", log_filename=log_filename, log_path=log_path)
+        if is_log_main:
+            log(f"Successfully computed density map for {molecule_name}. Check the map in: {output_density_path_full}.", status="INFO", 
+                log_filename=log_main_filename, log_path=log_main_path)
 
     except Exception as e:
-        if write_log:
-            log(f"Failed to compute density map for {molecule_name}: {e}", status="ERROR", log_filename=log_filename, log_path=log_path)
+        if is_log_main:
+            log(f"Failed to compute density map for {molecule_name}: {e}", status="ERROR", 
+                log_filename=log_main_filename, log_path=log_main_path)
 
     finally:
         if clear_temporary:
             shutil.rmtree(temporary_path)
 
-    return output_density_path_full
 
 
 
@@ -267,26 +310,75 @@ if __name__ == "__main__":
     molecule_names = read_molecule_names_from_file(molecule_names_csv)
 
 
-    # create log folders
-    log_path = os.getcwd() + os.path.sep + "log" # logs for main.py
-    if not os.path.exists(log_path):
-        os.mkdir(log_path)
-
-    chimera_log_path = os.getcwd() + os.path.sep + "chimera_logs" # logs for chimera scripts
-    if not os.path.exists(chimera_log_path):
-            os.mkdir(chimera_log_path)
+    # create log folders. NOTE: important to create if they don't exist, cause the code won't work otherwise!
+    is_log_main = True
+    is_log_chimera = True
+    log_main_path = os.getcwd() + os.path.sep + "log" # logs for main.py
+    log_main_filename = (
+        datetime.now(timezone.utc).strftime("%d_%m_%Y_%H.%M.%S.%f")[:-2]
+        + "_log.txt"
+    )
+    log_chimera_path = os.getcwd() + os.path.sep + "chimera_logs" # logs for chimera scripts
+    if is_log_main:
+        create_folder(log_main_path)
+    if is_log_chimera:
+        create_folder(log_chimera_path)
 
     # run computations in several Processes to speed up
-    procs = []
-    for molecule_name in molecule_names:
-        temporary_path = os.getcwd() + os.path.sep + f"{molecule_name}_temp" # path to the folder where temporary files will be stored (e.g. conformers)
-        kwargs = {"temporary_path": temporary_path, "clear_temporary": True, "log_path": log_path}
-        proc = Process(target=main, args=(molecule_name, db_path), kwargs=kwargs)
-        procs.append(proc)
-        proc.start()
+    n_proc = 94 # number of processes 
+    delete_prob = 0.2
+    box_size = 16
 
-    for proc in procs:
-        proc.join()
+    i = 0
+
+    # molecule_names = []
+    # with open(os.getcwd() + os.path.sep + "log" + os.path.sep + "bad_mols.txt", "r") as f:
+    #     for line in f:
+    #         molecule_names.append(line.strip())
+
+    # print(molecule_names)
+
+
+    # molecule_names = molecule_names[10: 1000]
+    
+    while i < len(molecule_names):
+        if i + n_proc <= len(molecule_names):
+            last_id = i + n_proc + 1 
+        else:
+            last_id = len(molecule_names)
+
+        procs = []
+
+        for j in range(i, last_id):
+            molecule_name = molecule_names[j]
+            output_density_path_full = (
+                db_path + 
+                os.path.sep + 
+                molecule_name + 
+                os.path.sep + 
+                f"{molecule_name}_ligand_scaled_boxed_{box_size}A_delprob{delete_prob}_low_resolution_forward_model.mrc"
+            )
+            temporary_path = os.getcwd() + os.path.sep + f"{molecule_name}_temp" # path to the folder where temporary files will be stored (e.g. conformers)
+            kwargs = {
+                "temporary_path": temporary_path, 
+                "clear_temporary": True, 
+                "delete_prob": delete_prob, 
+                "box_size": box_size,
+                "is_log_main": is_log_main,
+                "log_main_path": log_main_path,
+                "is_log_chimera": is_log_chimera,
+                "log_chimera_path": log_chimera_path,
+                "log_main_filename": log_main_filename,
+                "use_small_ring_torsions": False
+            }
+            proc = Process(target=main, args=(molecule_name, db_path, output_density_path_full), kwargs=kwargs)
+            procs.append(proc)
+            proc.start()
+
+        for proc in procs:
+            proc.join()
+
+        i = last_id
 
 
 

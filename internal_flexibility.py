@@ -1,5 +1,6 @@
 import os
 import numpy as np
+from subprocess import PIPE
 from utilities import (
     read_molecule,
     save_all_conformers_to_pdb,
@@ -8,6 +9,7 @@ from utilities import (
     delete_extension_from_filename,
     extract_filename_from_full_path,
     group_conformers_to_single_file,
+    create_folder
 )
 from rdkit import Chem
 from rdkit.Chem import AllChem
@@ -17,7 +19,7 @@ def generate_conformers(
     mol,
     n_confs,
     add_Hs=False,
-    use_small_ring_torsions=True,
+    use_small_ring_torsions=False,
     prune_rms_tresh=1.0,
     random_seed=0xF00D,
 ):
@@ -40,7 +42,6 @@ def generate_conformers(
         mol = Chem.AddHs(mol)
 
     # specify parameters for the conformers generation
-    # TODO: check why the same conformers are generated when run multiple times
     params = AllChem.ETKDGv3()
     params.useSmallRingTorsions = use_small_ring_torsions
     params.pruneRMsThresh = prune_rms_tresh
@@ -123,9 +124,11 @@ if __name__ == "__main__":
         mol,
         n_confs=n_confs,
         add_Hs=False,
-        use_small_ring_torsions=True,
+        use_small_ring_torsions=False,
         prune_rms_tresh=1.0,
     )
+
+    print([x.GetId() for x in mol.GetConformers()])
 
     # save generated conformers to files
     conformers_path = os.getcwd() + os.path.sep + "raw_conformers_data"
@@ -147,24 +150,34 @@ if __name__ == "__main__":
 
     # compute "average" density map for the grouped conformers
     density_resolution = 3.5  # resolution of the density map (in Angstrom)
-    density_filename = ( 
+    density_path = os.getcwd() + os.path.sep + "density_maps" # path to the folder where density will be stored
+    density_filename = (
             delete_extension_from_filename(
                 input_filename
             )
             + ".mrc"
         )
-    density_path_full = os.getcwd() + os.path.sep + "density_maps" + os.path.sep + density_filename
-    if not os.path.exists(os.getcwd() + os.path.sep + "density_maps"):
-        os.mkdir(os.getcwd() + os.path.sep + "density_maps")
+    create_folder(density_path) # create a folder for the density files if it doesn't exist
+    density_path_full = density_path + os.path.sep + density_filename
+
+    # create a folder for Chimera logs if it doesn't exist
+    chimera_log_path = os.getcwd() + os.path.sep + "chimera_logs"
+    create_folder(chimera_log_path)
+    
     p = compute_density_map_in_chimera(
-        group_conformers_path, density_path_full, density_resolution=density_resolution
+        group_conformers_path, 
+        density_path_full, 
+        is_log=True, 
+        log_path=chimera_log_path, 
+        density_resolution=density_resolution,
+        stderr_file=PIPE
     )
 
     # check the density
-    stdout, stderr = p.communicate()
+    _, stderr = p.communicate()
 
     # if the subprocess finished with errors, check logs in chimera_logs folder
-    if stderr:
+    if  p.returncode != 0 or stderr:
         print(stderr)
         print("Failed to compute density map. Check logs in chimera_logs folder.")
 

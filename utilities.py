@@ -1,7 +1,7 @@
 import os
 import numpy as np
 import mrcfile
-from subprocess import PIPE, Popen
+from subprocess import Popen
 from rdkit import Chem
 from datetime import datetime, timezone
 
@@ -11,6 +11,7 @@ def run_script_inside_chimera(
     script_path=os.getcwd() + os.path.sep + "chimera_scripts",
     option_names=(),
     option_values=(),
+    stderr_file=None
 ):
     """
     Runs given python script inside Chimera through a subprocess (simulates running
@@ -25,6 +26,7 @@ def run_script_inside_chimera(
     script_path - path to the python script (excluding its name)
     option_names - names of the options provided to the script
     option_values - values for the options provided to the script
+    stderr_file - file object to log errors from the subprocess if any
 
     Returns:
     p - object of the Popen class corresponding to the Chimera's subprocess
@@ -58,8 +60,7 @@ def run_script_inside_chimera(
             "--script",
             script_line,
         ],
-        stdout=PIPE,
-        stderr=PIPE,
+        stderr=stderr_file,
     )
 
     return p
@@ -68,8 +69,11 @@ def run_script_inside_chimera(
 def compute_density_map_in_chimera(
     molecule_path_full,
     density_path_full,
+    is_log=False,
+    log_path=os.getcwd() + os.path.sep + "chimera_logs",
     density_resolution=1.0,
     script_path=os.getcwd() + os.path.sep + "chimera_scripts",
+    stderr_file=None
 ):
     """
     Computes density map for the given molecule/conformer using Chimera.
@@ -79,8 +83,11 @@ def compute_density_map_in_chimera(
     Params:
     molecule_path_full - full path to the input molecule file (including its name)
     density_path_full - full path to the output mrc density file (including its name)
+    is_log - should we write logs for Chimera scripts
+    log_path - path to the folder where the log file will be stored (excluding the file's name which will be created automatically)
     density_resolution - desired resolution of the map (in Angstrom)
     script_path - path to the folder with python script (excluding its name)
+    stderr_file - file object to log errors from the subprocess if any
 
     Returns:
     p - object of the Popen class corresponding to the Chimera's subprocess
@@ -90,8 +97,11 @@ def compute_density_map_in_chimera(
     scipt_name = "chimera_density_map.py"
 
     # options for the python script
-    option_names = ("-i", "-r", "-o")
-    option_values = (molecule_path_full, density_resolution, density_path_full)
+    option_names = ["-i", "-r", "-o"]
+    option_values = [molecule_path_full, density_resolution, density_path_full]
+    if is_log:
+        option_names.append("-l")
+        option_values.append(log_path)
 
     # returns object corresponding to the subprocess
     p = run_script_inside_chimera(
@@ -99,6 +109,7 @@ def compute_density_map_in_chimera(
         script_path=script_path,
         option_names=option_names,
         option_values=option_values,
+        stderr_file=stderr_file
     )
 
     return p
@@ -126,8 +137,7 @@ def compute_density_map_in_chimera(
 #     assert raw_pdb_filename.endswith(".pdb"), "pdb filename must end with .pdb!"
 
 #     # create directory for prepared molecule files if it doesn't exist
-#     if not os.path.exists(molecule_path):
-#         os.mkdir(molecule_path)
+#     create_folder(molecule_path)
 
 #     # construct full path to the input raw pdb file
 #     raw_pdb_path_full = raw_molecule_path + os.path.sep + raw_pdb_filename
@@ -364,8 +374,8 @@ def save_one_conformer_to_pdb(
 
     assert pdb_filename.endswith(".pdb"), "pdb filename must end with .pdb!"
 
-    if not os.path.exists(pdb_path):  # create the folder for saving if it doesn't exist
-        os.mkdir(pdb_path)
+    # create the folder for saving if it doesn't exist
+    create_folder(pdb_path)
 
     # construct full path to the pdb file (including its name)
     pdb_path_full = pdb_path + os.path.sep + pdb_filename
@@ -438,10 +448,8 @@ def group_conformers_to_single_file(
     # exctract format of the group file
     group_file_format = extract_format_from_filename(group_filename)
 
-    if not os.path.exists(
-        group_path
-    ):  # create the folder for group if it doesn't exist
-        os.mkdir(group_path)
+    # create the folder for group if it doesn't exist
+    create_folder(group_path)
 
     # construct full path to the group fil
     group_path_full = group_path + os.path.sep + group_filename
@@ -468,7 +476,12 @@ def group_conformers_to_single_file(
     return group_path_full
 
 
-def rescale_density_map(density_path_full, rescaled_path_full, box_size=16):
+def rescale_density_map(
+        density_path_full, 
+        rescaled_path_full, 
+        box_size=16,
+        stderr_file=None
+    ):
     """
     Rescales given density map such that it fits the given box size. 
     Achieves this by running relion software commands through a subprocess.
@@ -477,6 +490,8 @@ def rescale_density_map(density_path_full, rescaled_path_full, box_size=16):
     density_path_full - full path to the input denisty map i.e. map to rescale (including its name)
     rescaled_path_full - full path to the output file with rescaled density
     box_size - size of the box (the box to which we rescale)
+    stderr_file - file object to log errors from the subprocess if any
+
 
     Returns:
     p - object of the Popen class corresponding to the relion's subprocess
@@ -493,8 +508,7 @@ def rescale_density_map(density_path_full, rescaled_path_full, box_size=16):
         "--o",
         rescaled_path_full
     ],
-    stdout=PIPE,
-    stderr=PIPE,
+    stderr=stderr_file,
     )
     
     return p
@@ -519,8 +533,7 @@ def log(
 
     # create directory for log files if it doesn't exist
     # NOTE: commented out folder creation since there were conflicts with Multi Processing
-    # if not os.path.exists(log_path):
-    #     os.mkdir(log_path)
+    # create_folder(log_path)
 
     # full path to the log file (including its name)
     path_full = log_path + os.path.sep + log_filename
@@ -540,3 +553,14 @@ def log(
     with open(path_full, "a") as f:
         f.write(log_message)
 
+
+def create_folder(folder_path):
+    """
+    Creates a folder if it doesn't exist. Usually used for log folders.
+
+    Params:
+    folder_path - path to the folder that shold be created
+    """
+
+    if not os.path.exists(folder_path):
+        os.mkdir(folder_path)

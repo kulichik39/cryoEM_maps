@@ -10,3 +10,4 @@ raw_conformers_data/
 delatoms_conformers_data/
 log/
 *temp/
+temp*
