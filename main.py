@@ -161,6 +161,8 @@ def generate_low_resolution_density(
     density_path_full = temporary_path + os.path.sep + density_filename
 
     # full path to the file to store Chimera subprocess errors if any
+    # TODO: think about returning to PIPE instead of writting errors into a file
+    # since PIPE seems to work fine (need to double check)
     stderr_file_chim_path = (
         os.getcwd() + 
         os.path.sep + 
